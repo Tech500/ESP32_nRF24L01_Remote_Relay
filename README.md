@@ -9,7 +9,7 @@ Thanks to Google's Bard for answering my many prompts and Bard's guidence; helpe
 
 SPI-ESP32 pin connections for ESP32 DEVKIT V1 board:
 
-MOSI 23, MISO 19, SCK 18, CE 5 CSN 21 IRQ 4, Vcc, and GND.
+MOSI 23, MISO 19, SCK 18, CE 5 CSN 21 IRQ 4, Vcc, and GND.  Pins were verified by successfully running RF24 library's "Getting Started" example code.
 
 Project is a work-in-progress...  No attempt to reduce current consumption...
 
