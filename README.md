@@ -1,4 +1,4 @@
-ESP32 DEVKIT V1:  ESP32_nRF24L01_Remote_Relay
+ESP32 DEVKIT V1:  ESP32_nRF24L01_Remote_Relay                 Latest!
 
 Uses external wake-up by 2.4 Ghz., RF Interrupt for a Deep Sleeping, ESP32. n24L01, transceiver; code uses two, nRF24L01 to remotely switch battery on or off for a low demand, 
 video live stream. Web camera consumes 10,000 mAH every 24 hours; switching battery on/off by webserver, URL Request over the nRF24L01 should extend battery between battery charges.
