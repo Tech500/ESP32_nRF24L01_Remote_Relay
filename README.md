@@ -13,7 +13,5 @@ MOSI 23, MISO 19, SCK 18, CE 5 CSN 21 IRQ 4, Vcc, and GND.  Pins were verified b
 
 Project is a work-in-progress...  No attempt to reduce current consumption...
 
-Update fixes issue of repeating cycle of on and off.  Also fixed; issue of Deep Sleep immediately going out of deepsleep.  Last issue was fixed by moving RTC_IO configuration to after 
-enable RTC Power Domain enabling.
 
 William
