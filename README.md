@@ -5,12 +5,15 @@ video live stream. Web camera consumes 10,000 mAH every 24 hours; switching batt
 
 Thanks to Google's Bard for answering my many prompts and Bard's guidence; especially with RTC_IO, Bard helped make this project a reality!
 
-02/04/2024 Files have been updated; supporting switching battery on/off, putting the ESP32 into Deep Sleep, and waking ESP32 from Deep Sleep; using external 0, RTC_GPIO pin.
+02/06/2024 Files have been updated; supporting switching battery on/off, putting the ESP32 into Deep Sleep, and waking ESP32 from Deep Sleep; using external 0, RTC_GPIO pin.
 
 SPI-ESP32 pin connections for ESP32 DEVKIT V1 board:
 
 MOSI 23, MISO 19, SCK 18, CE 5 CSN 21 IRQ 4, Vcc, and GND.  Pins were verified by successfully running RF24 library's "Getting Started" example code.
 
 Project is a work-in-progress...  No attempt to reduce current consumption...
+
+Update fixes issue of repeating cycle of on and off.  Also fixed; issue of Deep Sleep immediately going out of deepsleep.  Last issue was fixed by moving RTC_IO configuration to after 
+enable RTC Power Domain enabling.
 
 William
