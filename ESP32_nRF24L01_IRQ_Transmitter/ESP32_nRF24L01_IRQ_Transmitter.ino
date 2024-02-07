@@ -26,8 +26,8 @@
 #define IRQ_PIN 4
 
 // Replace with your network details
-const char *ssid = "R2D2";
-const char *password = "sissy4357";
+const char *ssid = "xxxxxx";
+const char *password = "xxxxxxxx";
 
 WiFiClient client;
 
