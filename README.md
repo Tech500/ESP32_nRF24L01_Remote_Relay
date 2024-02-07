@@ -13,7 +13,7 @@ MOSI 23, MISO 19, SCK 18, CE 5 CSN 21 IRQ 4, Vcc, and GND.  Pins were verified b
 
 Project is a work-in-progress...  No attempt to reduce current consumption...
 
-10K Pullup resistor between 3.3 Volt pin and GPIO_NUM_33 pin.
+10K Pullup resistor between 3.3 Volt pin and GPIO_NUM_33 pin.  Connection to n24L01, IRQ directly to GPIO_NUM_33
 
 Developed using Chrome browser, Arduino IDE 2.2.1, ESP32 Core 2.0.14
 
