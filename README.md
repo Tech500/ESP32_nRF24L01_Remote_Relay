@@ -5,7 +5,7 @@ video live stream. Web camera consumes 10,000 mAH every 24 hours; switching batt
 
 Thanks to Google's Bard for answering my many prompts and Bard's guidence; especially with RTC_IO, Bard helped make this project a reality!
 
-02/07/2024 Files have been updated; supporting switching battery on/off, putting the ESP32 into Deep Sleep, and waking ESP32 from Deep Sleep; using external 0, RTC_GPIO pin.
+02/13/2024 Files have been updated; supporting switching battery on/off, putting the ESP32 into Deep Sleep, and waking ESP32 from Deep Sleep; using external 0, RTC_GPIO pin.
 
 SPI-ESP32 pin connections for ESP32 DEVKIT V1 board:
 
@@ -15,7 +15,7 @@ Project is a work-in-progress...  No attempt to reduce current consumption...
 
 10K Pullup resistor between 3.3 Volt pin and GPIO_NUM_33 pin.  Connection to n24L01, IRQ directly to GPIO_NUM_33
 
-Developed using Chrome browser, Arduino IDE 2.2.1, ESP32 Core 2.0.14
+Developed using Chrome browser, Arduino IDE 2.2.1, ESP32 Core 2.0.14, and ESP32 Devkit v1 Development board. 
 
 
 William
