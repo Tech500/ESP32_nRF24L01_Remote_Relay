@@ -1,15 +1,19 @@
-//  ESP32_nRF24L01_IRQ_Receiver.ino  William Lucid 02/04/2024 @ 21:07 EST
+//  ESP32_nRF24L01_IRQ_Receiver.ino  William Lucid 02/13/2024 @ 11:42 EST
 //  Based on RF24 library example "InterruptConfigure"
 //  https://github.com/nRF24/RF24/blob/update-irq-example/examples/InterruptConfigure/InterruptConfigure.ino
 //  Example:  Author: Brendan Doherty (2bndy5)
-//  Addition code, references, guidance, and lots of help:  Google's Bard.
+//  Addition code, references, guidance, and lots of help:  Google's Gemini.
 
+#include <Arduino.h>
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
 #include <printf.h>
 #include "esp_sleep.h"
-#include <driver/rtc_io.h>
+#include "soc/rtc_cntl_reg.h"
+#include "soc/rtc.h"
+#include "esp32/rom/rtc.h"
+#include "driver/rtc_io.h"
 
 #define MOSI 23
 #define MISO 19
@@ -19,7 +23,33 @@
 
 #define INTERRUPT_PIN GPIO_NUM_33
 
-#define relayPin 22
+#define INTERRUPT_PIN_BITMASK 0x100000000 // 2^33 in hex
+
+void print_reset_reason(int reason)
+{
+
+  switch ( reason)
+  {
+    case 1 : Serial.println ("POWERON_RESET");break;          /**<1,  Vbat power on reset*/
+    case 3 : Serial.println ("SW_RESET");break;               /**<3,  Software reset digital core*/
+    case 4 : Serial.println ("OWDT_RESET");break;             /**<4,  Legacy watch dog reset digital core*/
+    case 5 : Serial.println ("DEEPSLEEP_RESET");break;        /**<5,  Deep Sleep reset digital core*/
+    case 6 : Serial.println ("SDIO_RESET");break;             /**<6,  Reset by SLC module, reset digital core*/
+    case 7 : Serial.println ("TG0WDT_SYS_RESET");break;       /**<7,  Timer Group0 Watch dog reset digital core*/
+    case 8 : Serial.println ("TG1WDT_SYS_RESET");break;       /**<8,  Timer Group1 Watch dog reset digital core*/
+    case 9 : Serial.println ("RTCWDT_SYS_RESET");break;       /**<9,  RTC Watch dog Reset digital core*/
+    case 10 : Serial.println ("INTRUSION_RESET");break;       /**<10, Instrusion tested to reset CPU*/
+    case 11 : Serial.println ("TGWDT_CPU_RESET");break;       /**<11, Time Group reset CPU*/
+    case 12 : Serial.println ("SW_CPU_RESET");break;          /**<12, Software reset CPU*/
+    case 13 : Serial.println ("RTCWDT_CPU_RESET");break;      /**<13, RTC Watch dog Reset CPU*/
+    case 14 : Serial.println ("EXT_CPU_RESET");break;         /**<14, for APP CPU, reseted by PRO CPU*/
+    case 15 : Serial.println ("RTCWDT_BROWN_OUT_RESET");break;/**<15, Reset when the vdd voltage is not stable*/
+    case 16 : Serial.println ("RTCWDT_RTC_RESET");break;      /**<16, RTC Watch dog reset digital core and rtc module*/
+    default : Serial.println ("NO_MEAN");
+  }
+}
+
+#define relayPin 32
 
 #define POLL_INTERVAL_MS 100 // Example poll interval in milliseconds
 
@@ -27,9 +57,13 @@ volatile bool rtc_interrupt_triggered = false;
 volatile bool ext_wakeup_triggered = false;
 bool external_wakeup = false; // Set to true if external wakeup is enabled
 
-void IRAM_ATTR rtc_isr() {
-  rtc_interrupt_triggered = true;
-}
+bool irqFlag = false;
+
+void IRAM_ATTR gpio_isr_handler(void* arg) {
+  // Optionally, clear the interrupt flag here if needed
+  //gpio_set_intr_flag_clear(INTERRUPT_PIN);
+  irqFlag = true;  // Set the flag here
+}  
 
 RTC_DATA_ATTR int bootCount = 0;
 
@@ -57,23 +91,46 @@ void setup() {
   while (!Serial) {};
 
   Serial.println("\n\n\nESP32_nRF24L01_IRQ_Receiver.ino\nReceiving...\n");
+  
+  Serial.println("CPU0 reset reason:");
+  print_reset_reason(rtc_get_reset_reason(0));
+  //verbose_print_reset_reason(rtc_get_reset_reason(0));
+
+  Serial.println("CPU1 reset reason:");
+  print_reset_reason(rtc_get_reset_reason(1));
+  //verbose_print_reset_reason(rtc_get_reset_reason(1));
+
+  // Enable power domain for the GPIO pin
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
 
   pinMode(relayPin, OUTPUT);
+  pinMode(INTERRUPT_PIN, INPUT_PULLUP);
 
-  // Setup RTC GPIO as input  
-  rtc_gpio_init(INTERRUPT_PIN);
-  rtc_gpio_set_direction(INTERRUPT_PIN, RTC_GPIO_MODE_INPUT_ONLY);
-  rtc_gpio_set_level(INTERRUPT_PIN, LOW);    
-  rtc_gpio_pullup_en(INTERRUPT_PIN);  
+ 
+  //Increment boot number and print it every reboot
+  ++bootCount;
+  Serial.println("Boot number: " + String(bootCount)); 
+   
+  // Enable RTC peripheral and EXT0 wake-up on the chosen pin
+  esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, 0);
   
-  // Attach interrupt for RTC GPIO pin
-  attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), rtc_isr, CHANGE);
-  
+  // Configure pin for interrupt  ... in setup() or elsewhere
+  gpio_config_t io_conf;
+  io_conf.intr_type = GPIO_INTR_NEGEDGE;  // Trigger on falling edge (LOW)
+  io_conf.pin_bit_mask = (1ULL << INTERRUPT_PIN);
+  io_conf.mode = GPIO_MODE_INPUT;
+  io_conf.pull_up_en = GPIO_PULLUP_ENABLE;  // Enable internal pullup resistor
+  gpio_config(&io_conf);
+
+  gpio_install_isr_service(0);  // Install GPIO interrupt service
+  gpio_isr_handler_add(INTERRUPT_PIN, gpio_isr_handler, (void*)INTERRUPT_PIN);
+
   SPI.begin(SCK, MISO, MOSI, SS);
 
   radio.begin(SS, CSN);
   radio.setDataRate(RF24_250KBPS);
   radio.setChannel(7);
+  radio.setAutoAck(false);
   radio.setPALevel(RF24_PA_LOW);
   
   // For this example we use acknowledgment (ACK) payloads to trigger the
@@ -96,23 +153,28 @@ void setup() {
   // let IRQ pin only trigger on "data ready" event in RX mode
   radio.maskIRQ(1,1,0);  // args = "data_sent", "data_fail", "data_ready"
 
-  /*
+  //radio.startListening();
+
   // For debugging info
-   printf_begin();             // needed only onSS for printing details
+  //printf_begin();             // needed only onSS for printing details
   // radio.printDetails();       // (smaller) function that prints raw register values
-   radio.printPrettyDetails(); // (larger) function that prints human readable data
-  */
-
-  esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, 0);
-
-  radio.startListening();
+  //radio.printPrettyDetails(); // (larger) function that prints human readable data 
 }
 
-void loop() 
-{
+void loop(){
 
-  if (rtc_interrupt_triggered) {
+  //Serial.println("Gets here... No deep sleep");
+    
+  //pinMode(INTERRUPT_PIN, INPUT); // Reaffirm pin mode
+  //digitalWrite(INTERRUPT_PIN, HIGH);
+  
+  //detachInterrupt(digitalPinToInterrupt(GPIO_NUM_33));
+  //delay(100);
 
+  radio.startListening();
+
+  if (irqFlag == true) {
+       
     Serial.println("Interrupt gets here...");
 
     if(radio.available())
@@ -134,26 +196,24 @@ void loop()
         digitalWrite(relayPin, LOW);
         Serial.println("\nBattery power switched OFF");
         Serial.println("ESP32 going to Deep Sleep\n");
-      }   
-    }
-
-    rtc_interrupt_triggered = false;
-
-  }
+        // Enable RTC peripheral and EXT0 wake-up on the chosen pin
+        deepSleep();
+      }       
+    } 
+    radio.stopListening();      
+  } 
+  irqFlag = false; 
 }
 
-void gotoDeepsleep(){
-
-        Serial.println("Gets to gotoDeepsleep");
-  
-        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-        rtc_gpio_set_direction(INTERRUPT_PIN, RTC_GPIO_MODE_INPUT_ONLY);
-        rtc_gpio_set_level(INTERRUPT_PIN, HIGH);  // Set output high       
-        rtc_gpio_pullup_en(INTERRUPT_PIN); // Correct argument
-        rtc_gpio_pulldown_dis(INTERRUPT_PIN);
-        rtc_gpio_hold_en(INTERRUPT_PIN);
-        esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, LOW);  
-        delay(100);
-        esp_deep_sleep_start();
-        Serial.println("This will never be printed");
+void deepSleep(){
+  detachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN));
+  // Enable RTC peripherals for deep sleep
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+  rtc_gpio_init(INTERRUPT_PIN);
+  rtc_gpio_pullup_dis(INTERRUPT_PIN); 
+  rtc_gpio_pulldown_en(INTERRUPT_PIN);
+  rtc_gpio_hold_en(INTERRUPT_PIN);
+  esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, GPIO_INTR_LOW_LEVEL);
+  delay(100); 
+  esp_deep_sleep_start();
 }
