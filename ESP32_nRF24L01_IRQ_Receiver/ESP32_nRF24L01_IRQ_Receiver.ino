@@ -1,8 +1,8 @@
-//  ESP32_nRF24L01_IRQ_Receiver.ino  William Lucid 02/13/2024 @ 11:42 EST
+//  ESP32_nRF24L01_IRQ_Receiver.ino  William Lucid 02/13/2024 @ 11:56 EST
 //  Based on RF24 library example "InterruptConfigure"
 //  https://github.com/nRF24/RF24/blob/update-irq-example/examples/InterruptConfigure/InterruptConfigure.ino
 //  Example:  Author: Brendan Doherty (2bndy5)
-//  Addition code, references, guidance, and lots of help:  Google's Gemini.
+//  Addition code, references, guidance, and lots of help:  Google's Bard.
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -18,8 +18,8 @@
 #define MOSI 23
 #define MISO 19
 #define SCK  18
-#define SS    5
-#define CSN  21
+#define SS   17
+#define CSN   5
 
 #define INTERRUPT_PIN GPIO_NUM_33
 
@@ -60,8 +60,8 @@ bool external_wakeup = false; // Set to true if external wakeup is enabled
 bool irqFlag = false;
 
 void IRAM_ATTR gpio_isr_handler(void* arg) {
-  // Optionally, clear the interrupt flag here if needed
-  //gpio_set_intr_flag_clear(INTERRUPT_PIN);
+  //rtc_gpio_pullup_dis(INTERRUPT_PIN); 
+  //rtc_gpio_pulldown_en(INTERRUPT_PIN);
   irqFlag = true;  // Set the flag here
 }  
 
@@ -94,25 +94,22 @@ void setup() {
   
   Serial.println("CPU0 reset reason:");
   print_reset_reason(rtc_get_reset_reason(0));
-  //verbose_print_reset_reason(rtc_get_reset_reason(0));
-
+  
   Serial.println("CPU1 reset reason:");
   print_reset_reason(rtc_get_reset_reason(1));
-  //verbose_print_reset_reason(rtc_get_reset_reason(1));
-
-  // Enable power domain for the GPIO pin
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-
+  
   pinMode(relayPin, OUTPUT);
   pinMode(INTERRUPT_PIN, INPUT_PULLUP);
-
  
   //Increment boot number and print it every reboot
   ++bootCount;
   Serial.println("Boot number: " + String(bootCount)); 
    
   // Enable RTC peripheral and EXT0 wake-up on the chosen pin
-  esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, 0);
+  //esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, FALLING);
+
+  // Enable power domain for the GPIO pin
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
   
   // Configure pin for interrupt  ... in setup() or elsewhere
   gpio_config_t io_conf;
@@ -159,18 +156,15 @@ void setup() {
   //printf_begin();             // needed only onSS for printing details
   // radio.printDetails();       // (smaller) function that prints raw register values
   //radio.printPrettyDetails(); // (larger) function that prints human readable data 
+
+  Serial.println("\nGets here... setup\n");
 }
+
 
 void loop(){
 
-  //Serial.println("Gets here... No deep sleep");
+  //Serial.println("\nGets here... No deep sleep\n");
     
-  //pinMode(INTERRUPT_PIN, INPUT); // Reaffirm pin mode
-  //digitalWrite(INTERRUPT_PIN, HIGH);
-  
-  //detachInterrupt(digitalPinToInterrupt(GPIO_NUM_33));
-  //delay(100);
-
   radio.startListening();
 
   if (irqFlag == true) {
@@ -206,12 +200,11 @@ void loop(){
 }
 
 void deepSleep(){
-  detachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN));
-  // Enable RTC peripherals for deep sleep
+  //detachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN));
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
   rtc_gpio_init(INTERRUPT_PIN);
-  rtc_gpio_pullup_dis(INTERRUPT_PIN); 
-  rtc_gpio_pulldown_en(INTERRUPT_PIN);
+  rtc_gpio_pullup_en(INTERRUPT_PIN); 
+  rtc_gpio_pulldown_dis(INTERRUPT_PIN);
   rtc_gpio_hold_en(INTERRUPT_PIN);
   esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, GPIO_INTR_LOW_LEVEL);
   delay(100); 
