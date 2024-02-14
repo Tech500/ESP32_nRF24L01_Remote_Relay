@@ -1,8 +1,8 @@
-//  ESP32_nRF24L01_IRQ_Receiver.ino  William Lucid 02/13/2024 @ 11:56 EST
+//  ESP32_nRF24L01_IRQ_Receiver.ino  William Lucid 02/13/2024 @ 8:42 PM EST
 //  Based on RF24 library example "InterruptConfigure"
 //  https://github.com/nRF24/RF24/blob/update-irq-example/examples/InterruptConfigure/InterruptConfigure.ino
 //  Example:  Author: Brendan Doherty (2bndy5)
-//  Addition code, references, guidance, and lots of help:  Google's Bard.
+//  Addition code, references, guidance, and lots of help:  Google's Gemini.
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -18,8 +18,8 @@
 #define MOSI 23
 #define MISO 19
 #define SCK  18
-#define SS   17
-#define CSN   5
+#define SS   22
+#define CSN  15
 
 #define INTERRUPT_PIN GPIO_NUM_33
 
@@ -60,9 +60,7 @@ bool external_wakeup = false; // Set to true if external wakeup is enabled
 bool irqFlag = false;
 
 void IRAM_ATTR gpio_isr_handler(void* arg) {
-  //rtc_gpio_pullup_dis(INTERRUPT_PIN); 
-  //rtc_gpio_pulldown_en(INTERRUPT_PIN);
-  irqFlag = true;  // Set the flag here
+  irqFlag = true;  // Set the flag for processing nRF24L01 data
 }  
 
 RTC_DATA_ATTR int bootCount = 0;
@@ -106,7 +104,7 @@ void setup() {
   Serial.println("Boot number: " + String(bootCount)); 
    
   // Enable RTC peripheral and EXT0 wake-up on the chosen pin
-  //esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, FALLING);
+  esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, FALLING);
 
   // Enable power domain for the GPIO pin
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
@@ -150,8 +148,6 @@ void setup() {
   // let IRQ pin only trigger on "data ready" event in RX mode
   radio.maskIRQ(1,1,0);  // args = "data_sent", "data_fail", "data_ready"
 
-  //radio.startListening();
-
   // For debugging info
   //printf_begin();             // needed only onSS for printing details
   // radio.printDetails();       // (smaller) function that prints raw register values
@@ -167,7 +163,8 @@ void loop(){
     
   radio.startListening();
 
-  if (irqFlag == true) {
+  if (irqFlag == true){
+    
        
     Serial.println("Interrupt gets here...");
 
@@ -199,14 +196,22 @@ void loop(){
   irqFlag = false; 
 }
 
+
 void deepSleep(){
-  //detachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN));
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
   rtc_gpio_init(INTERRUPT_PIN);
   rtc_gpio_pullup_en(INTERRUPT_PIN); 
   rtc_gpio_pulldown_dis(INTERRUPT_PIN);
-  rtc_gpio_hold_en(INTERRUPT_PIN);
   esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, GPIO_INTR_LOW_LEVEL);
-  delay(100); 
   esp_deep_sleep_start();
 }
+
+
+/*
+void deepSleep() {
+  rtc_gpio_init(INTERRUPT_PIN);
+  rtc_gpio_pullup_en(INTERRUPT_PIN); 
+  rtc_gpio_pulldown_dis(INTERRUPT_PIN);
+  esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, GPIO_INTR_LOW_LEVEL);
+  esp_deep_sleep_start();
+}
+*/
