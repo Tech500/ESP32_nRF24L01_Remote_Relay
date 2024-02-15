@@ -1,8 +1,10 @@
-//  ESP32_nRF24L01_IRQ_Receiver.ino  William Lucid 02/14/2024 @ 08:45 AM EST
+//  ESP32_nRF24L01_IRQ_Receiver.ino  William Lucid 02/15/2024 @ 02:33 AM EST
 //  Based on RF24 library example "InterruptConfigure"
 //  https://github.com/nRF24/RF24/blob/update-irq-example/examples/InterruptConfigure/InterruptConfigure.ino
 //  Example:  Author: Brendan Doherty (2bndy5)
 //  Addition code, references, guidance, and lots of help:  Google's Bard.
+
+//ESP.com Topic:  https://esp32.com/viewtopic.php?f=19&t=38390
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -13,25 +15,21 @@
 #include "soc/rtc_cntl_reg.h"
 #include "soc/rtc.h"
 #include "esp32/rom/rtc.h"
-#include <driver/rtc_io.h>
-#include <driver/gpio.h>
+#include "driver/rtc_io.h"
 
 #define MOSI 23
 #define MISO 19
 #define SCK  18
-#define SS   22
-#define CSN  15
+#define SS   12
+#define CSN   5   
 
 #define INTERRUPT_PIN GPIO_NUM_33
 
 #define INTERRUPT_PIN_BITMASK 0x100000000 // 2^33 in hex
 
-#define relayPin 21
-
-RTC_DATA_ATTR int bootCount = 0;
-
 void print_reset_reason(int reason)
 {
+
   switch ( reason)
   {
     case 1 : Serial.println ("POWERON_RESET");break;          /**<1,  Vbat power on reset*/
@@ -53,9 +51,27 @@ void print_reset_reason(int reason)
   }
 }
 
-int data;
+#define relayPin 22
+
+#define POLL_INTERVAL_MS 100 // Example poll interval in milliseconds
+
+/*
+volatile bool rtc_interrupt_triggered = false;
+volatile bool ext_wakeup_triggered = false;
+bool external_wakeup = false; // Set to true if external wakeup is enabled
+*/
 
 bool irqFlag = false;
+
+void IRAM_ATTR interruptHandler() {
+  // Optionally, clear the interrupt flag here if needed
+  //gpio_set_intr_flag_clear(INTERRUPT_PIN);
+  irqFlag = true;  // Set the flag here
+}  
+
+RTC_DATA_ATTR int bootCount = 0;
+
+int data;
 
 struct payload_t {
   int switchState;  
@@ -63,46 +79,24 @@ struct payload_t {
 
 payload_t incoming;
 
+RF24 radio(SS, CSN, 4000000);  // set SPI speed to 4MHz instead of default 10MHz
+
+uint8_t address[][6] = { "1Node", "2Node" };  //Byte of array representing the address. This is the address where we will send the data. This should be same on the reSSiving side.
 // to use different addresses on a pair of radios, we need a variable to
 // uniquely identify which address this radio will use to transmit
 bool radioNumber = 1;  // 0 uses address[0] to transmit, 1 uses address[1] to transmit
 
-// Used to control whether this node is sending or reSSiving
-bool role = false;  // true = TX role, false = RX role
-
-// For this example, we'll be using a payload containing
-// a string that changes on every transmission. (sucSSssful or not)
-// Make a couple arrays of payloads & an iterator to traverse them
-const uint8_t tx_pl_size = 5;
-const uint8_t ack_pl_size = 4;
-uint8_t pl_iterator = 0;
-// The " + 1" compensates for the c-string's NULL terminating 0
-//char tx_payloads[][sizeof(incoming) + 1] = { "Ping ", "Pong ", "Radio", "1FAIL" };
-char ack_payloads[][ack_pl_size + 1] = { "Yak ", "Back", " ACK" };
-
-RF24 radio(SS, CSN, 4000000);  // set SPI speed to 4MHz instead of default 10MHz
-
-uint8_t address[][6] = { "1Node", "2Node" };  //Byte of array representing the address. This is the address where we will send the data. This should be same on the reSSiving side. 
-
-void IRAM_ATTR gpio_isr_handler(void* arg) {
-  irqFlag = true;  // Set the flag here
-}  
-
-void interruptHandler();  // prototype to handle IRQ events
-//void printRxFifo();       // prototype to print RX FIFO with 1 buffer
+// Used to control whether this node is sending or receiving
+bool role = false;  // true = TX node, false = RX node
 
 void setup() {
 
   Serial.begin(9600);
   while (!Serial) {};
 
-  Serial.println("\n\n\nnESP32_nRF24L01_IRQ_Receiver.ino\nReceiving...\n");
-
-  //Increment boot number and print it every reboot
-  ++bootCount;
-  Serial.println("\n\nBoot number: " + String(bootCount));
-
-  Serial.println("\nCPU0 reset reason:");
+  Serial.println("\n\n\nESP32_nRF24L01_IRQ_Receiver.ino\nReceiving...\n");
+  
+  Serial.println("CPU0 reset reason:");
   print_reset_reason(rtc_get_reset_reason(0));
   //verbose_print_reset_reason(rtc_get_reset_reason(0));
 
@@ -110,47 +104,42 @@ void setup() {
   print_reset_reason(rtc_get_reset_reason(1));
   //verbose_print_reset_reason(rtc_get_reset_reason(1));
 
-  rtc_gpio_hold_dis(INTERRUPT_PIN);
-
-  //pinMode(CSN, INPUT);
-  //digitalWrite(CSN, LOW);
+  // Enable power domain for the GPIO pin
+  //esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
 
   pinMode(relayPin, OUTPUT);
+  pinMode(INTERRUPT_PIN, INPUT_PULLUP);
 
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+  gpio_hold_dis(INTERRUPT_PIN);
+  gpio_deep_sleep_hold_dis();
 
-  esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, GPIO_INTR_LOW_LEVEL); 
+  pinMode(INTERRUPT_PIN, INPUT_PULLUP);
+  pinMode(relayPin, OUTPUT);
 
-  // Configure pin for interrupt  ... in setup() or elsewhere
-  gpio_config_t io_conf;
-  io_conf.intr_type = GPIO_INTR_NEGEDGE;  // Trigger on falling edge (LOW)
-  io_conf.pin_bit_mask = (1ULL << INTERRUPT_PIN);
-  io_conf.mode = GPIO_MODE_INPUT;
-  io_conf.pull_up_en = GPIO_PULLUP_ENABLE;  // Enable internal pullup resistor
-  gpio_config(&io_conf);
-
-  gpio_install_isr_service(0);  // Install GPIO interrupt service
-  gpio_isr_handler_add(INTERRUPT_PIN, gpio_isr_handler, (void*)INTERRUPT_PIN);
-
-  //attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), interruptHandler, FALLING);
+  attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), interruptHandler, FALLING);
   // IMPORTANT: do not call radio.available() before calling
   // radio.whatHappened() when the interruptHandler() is triggered by the
   // IRQ pin FALLING event. According to the datasheet, the pipe information
   // is unreliable during the IRQ pin FALLING transition.
 
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+  
   rtc_gpio_init(INTERRUPT_PIN);
   rtc_gpio_pullup_en(INTERRUPT_PIN);
   rtc_gpio_set_direction(INTERRUPT_PIN, RTC_GPIO_MODE_INPUT_ONLY);
   rtc_gpio_hold_dis(INTERRUPT_PIN); //disable hold before setting the level
   rtc_gpio_set_level(INTERRUPT_PIN, HIGH);  // Set output high
-  rtc_gpio_hold_en(INTERRUPT_PIN);
-
+  
+  //Increment boot number and print it every reboot
+  ++bootCount;
+  Serial.println("Boot number: " + String(bootCount)); 
+  
   SPI.begin(SCK, MISO, MOSI, SS);
 
   radio.begin(SS, CSN);
   radio.setDataRate(RF24_250KBPS);
-  radio.setAutoAck(false);
   radio.setChannel(7);
+  radio.setAutoAck(false);
   radio.setPALevel(RF24_PA_LOW);
   
   // For this example we use acknowledgment (ACK) payloads to trigger the
@@ -170,39 +159,29 @@ void setup() {
   radio.openReadingPipe(1, address[!radioNumber]);  // using pipe 1
 
   // setup for RX mode
-
   // let IRQ pin only trigger on "data ready" event in RX mode
   radio.maskIRQ(1,1,0);  // args = "data_sent", "data_fail", "data_ready"
 
-  // Fill the TX FIFO with 3 ACK payloads for the first 3 reSSived
-  // transmissions on pipe 1
-  radio.writeAckPayload(1, &ack_payloads[0], ack_pl_size);
-  radio.writeAckPayload(1, &ack_payloads[1], ack_pl_size);
-  radio.writeAckPayload(1, &ack_payloads[2], ack_pl_size);
+  radio.startListening();
+
+  // For debugging info
+  //printf_begin();             // needed only onSS for printing details
+  // radio.printDetails();       // (smaller) function that prints raw register values
+  //radio.printPrettyDetails(); // (larger) function that prints human readable data 
+
+  // Enable RTC peripheral and EXT0 wake-up on the chosen pin
+  esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, 0);
+}
+
+void loop(){
 
   radio.startListening();
   
-  // For debugging info
-  // printf_begin();             // needed only onSS for printing details
-  // radio.printDetails();       // (smaller) function that prints raw register values
-  // radio.printPrettyDetails(); // (larger) function that prints human readable data
-}
-
-void loop() 
-{
-
-  for(int x = 1;x < 2;x++){  
-    Serial.println("\nNo deep sleep\n");
-    while(irqFlag != true){}
-  }
-  
-  if (irqFlag == true) 
-  { 
-
-    irqFlag = false;
-    
-    bool tx_ds, tx_df, rx_dr;                 // declare variables for IRQ masks
-    radio.whatHappened(tx_ds, tx_df, rx_dr);  // get values for IRQ masks
+  //Serial.println("Gets here... No deep sleep");
+   
+  if (irqFlag == true) {
+       
+    Serial.println("Interrupt gets here...");
 
     if(radio.available())
     {
@@ -222,21 +201,23 @@ void loop()
         data = 0;
         digitalWrite(relayPin, LOW);
         Serial.println("\nBattery power switched OFF");
-        Serial.println("ESP32 going to Deep Sleep");
-        //digitalWrite(INTERRUPT_PIN, HIGH);
-        delay(100);  //Required to get ready
+        Serial.println("ESP32 going to Deep Sleep\n");
+        // Enable RTC peripheral and EXT0 wake-up on the chosen pin
         deepSleep();
-        Serial.println("This will never be printed");
-      }   
-    }
-  }
+      }       
+    } 
+    radio.stopListening();      
+  } 
+  irqFlag = false; 
 }
 
 void deepSleep(){
+  
   rtc_gpio_init(INTERRUPT_PIN);
-  rtc_gpio_pullup_en(INTERRUPT_PIN); 
+  rtc_gpio_pullup_en(INTERRUPT_PIN);
   rtc_gpio_pulldown_dis(INTERRUPT_PIN);
-  gpio_deep_sleep_hold_en();
-  gpio_hold_en(INTERRUPT_PIN);  
+  rtc_gpio_hold_en(INTERRUPT_PIN);
+  esp_sleep_enable_ext0_wakeup(INTERRUPT_PIN, 0);
+  delay(100); 
   esp_deep_sleep_start();
 }
