@@ -2,9 +2,7 @@
 //  Based on RF24 library example "InterruptConfigure"
 //  https://github.com/nRF24/RF24/blob/update-irq-example/examples/InterruptConfigure/InterruptConfigure.ino
 //  Example:  Author: Brendan Doherty (2bndy5)
-//  Addition code, references, guidance, and lots of help:  Google's Bard.
-
-//ESP.com Topic:  https://esp32.com/viewtopic.php?f=19&t=38390
+//  Addition code, references, guidance, and lots of help:  Google's Gemini.
 
 #include <Arduino.h>
 #include <SPI.h>
