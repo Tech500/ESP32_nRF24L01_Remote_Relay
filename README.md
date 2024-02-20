@@ -5,7 +5,7 @@ video live stream. Web camera consumes 10,000 mAH every 24 hours; switching batt
 
 Thanks to Google's Gemini for answering my many prompts and Gemini's guidence; especially with RTC_IO, Bard helped make this project a reality!
 
-02/13/2024 Files have been updated; supporting switching battery on/off, putting the ESP32 into Deep Sleep.
+02/19/2024 Files have been updated; supporting switching battery on/off, putting the ESP32 into Deep Sleep.
 
 SPI-ESP32 pin connections for ESP32 DEVKIT V1 board:
 
