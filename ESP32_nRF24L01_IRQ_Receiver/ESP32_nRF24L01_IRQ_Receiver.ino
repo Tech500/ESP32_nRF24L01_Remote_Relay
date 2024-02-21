@@ -2,7 +2,9 @@
 //  Based on RF24 library example "InterruptConfigure"
 //  https://github.com/nRF24/RF24/blob/update-irq-example/examples/InterruptConfigure/InterruptConfigure.ino
 //  Example:  Author: Brendan Doherty (2bndy5)
-//  Addition code, references, guidance, and lots of help:  Google's Bard.
+//  Addition code, references, guidance, and lots of help:  Google's Gemini.
+
+//  LED is connected to GPIO17; to a 220 ohm resistor, and ground.
 
 #include <SPI.h>
 #include <nRF24L01.h>
@@ -81,7 +83,7 @@ void setup() {
   Serial.begin(9600);
   while (!Serial) {};
 
-  Serial.println("\n\n\nnESP32_nRF24L01_IRQ_ReSSiver.ino\nReSSving...\n");
+  Serial.println("\n\n\nnESP32_nRF24L01_IRQ_Receiver.ino\nReceiving...\n");
 
   //Increment boot number and print it every reboot
   ++bootCount;
