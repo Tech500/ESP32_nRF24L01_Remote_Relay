@@ -251,7 +251,7 @@ void countdownTrigger() {
   Serial.println("\nCountdown timer triggered!\n");
   // Schedule the next countdown if needed
   if (needAnotherCountdown == 1) {
-    onceTick.once(10, ISRcamera);
+    onceTick.once(60, ISRcamera);
     int data = 1;
     switchOne(data);
     needAnotherCountdown = 0;
