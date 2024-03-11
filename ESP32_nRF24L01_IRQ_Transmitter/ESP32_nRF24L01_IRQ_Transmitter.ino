@@ -23,7 +23,7 @@
 #define MISO 19
 #define SCK  18
 #define SS    5
-#define CSN  21
+#define CSN  17
 
 #define IRQ_PIN 4
 
